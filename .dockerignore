@@ -1,0 +1,60 @@
+# Dependencies
+node_modules
+npm-debug.log
+
+# Source files (not needed in production)
+src
+tsconfig.json
+
+# Tests
+tests
+*.test.ts
+*.spec.ts
+coverage
+.nyc_output
+
+# Development files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Documentation
+README.md
+docs
+*.md
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Kubernetes
+k8s
+
+# Logs
+logs
+*.log
+
+# Build artifacts (we copy these explicitly)
+dist
+
+# Misc
+.editorconfig
+.eslintrc*
+.prettierrc*
+jest.config.*

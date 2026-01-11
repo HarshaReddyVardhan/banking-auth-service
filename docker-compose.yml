@@ -1,0 +1,151 @@
+version: '3.8'
+
+services:
+  # Banking Auth Service
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: banking_auth
+      DB_USER: auth_user
+      DB_PASSWORD: auth_password_dev
+      DB_SSL: "false"
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: redis_password_dev
+      REDIS_TLS: "false"
+
+      # JWT (for development - use actual keys in production)
+      JWT_PRIVATE_KEY: |
+        -----BEGIN RSA PRIVATE KEY-----
+        MIIJJwIBAAKCAgEA0Z3VS5JJcds3xfn/ygWyF8PbnGy0AXwYDGR+FBhB0kHdJz9m
+        ... (generate your own 3072-bit RSA key)
+        -----END RSA PRIVATE KEY-----
+      JWT_PUBLIC_KEY: |
+        -----BEGIN PUBLIC KEY-----
+        MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA0Z3VS5JJcds3xfn/ygWy
+        ... (corresponding public key)
+        -----END PUBLIC KEY-----
+      JWT_ACCESS_TOKEN_EXPIRY: "15m"
+      JWT_REFRESH_TOKEN_EXPIRY: "7d"
+
+      # Security
+      BCRYPT_ROUNDS: "12"
+      FIELD_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef"
+
+      # Kafka
+      KAFKA_BROKERS: kafka:9092
+
+      # Logging
+      LOG_LEVEL: debug
+      LOG_FORMAT: pretty
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks:
+      - banking-network
+    volumes:
+      - ./logs:/app/logs
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: banking_auth
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_password_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U auth_user -d banking_auth" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - banking-network
+
+  # Redis for sessions and rate limiting
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass redis_password_dev --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "redis_password_dev", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - banking-network
+
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    networks:
+      - banking-network
+
+  # Kafka for event publishing
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    depends_on:
+      - zookeeper
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - banking-network
+
+  # Kafka UI for development
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on:
+      - kafka
+    networks:
+      - banking-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  zookeeper_data:
+  kafka_data:
+
+
+networks:
+  banking-network:
+    driver: bridge

@@ -1,0 +1,84 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: banking-auth-service-network-policy
+  namespace: banking
+spec:
+  podSelector:
+    matchLabels:
+      app: banking-auth-service
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # Ingress rules - only allow traffic from API gateway
+  ingress:
+    - from:
+        # Allow from API Gateway
+        - namespaceSelector:
+            matchLabels:
+              name: api-gateway
+          podSelector:
+            matchLabels:
+              app: api-gateway
+        # Allow from same namespace (for health checks from ingress)
+        - namespaceSelector:
+            matchLabels:
+              name: banking
+          podSelector:
+            matchLabels:
+              app: ingress-controller
+      ports:
+        - protocol: TCP
+          port: 3000
+
+  # Egress rules - only allow specific destinations
+  egress:
+    # Allow DNS lookups
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+
+    # Allow PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+
+    # Allow Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+
+    # Allow Kafka
+    - to:
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - protocol: TCP
+          port: 9092
+
+    # Allow external HTTPS (for HaveIBeenPwned API, email services)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443

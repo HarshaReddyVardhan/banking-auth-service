@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: banking-auth-config
+  namespace: banking
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+
+  # Database (host from internal DNS)
+  DB_HOST: "postgres.banking.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "banking_auth"
+  DB_SSL: "true"
+  DB_SSL_REJECT_UNAUTHORIZED: "true"
+  DB_POOL_MIN: "5"
+  DB_POOL_MAX: "20"
+
+  # Redis (host from internal DNS)
+  REDIS_HOST: "redis.banking.svc.cluster.local"
+  REDIS_PORT: "6379"
+  REDIS_TLS: "true"
+  REDIS_DB: "0"
+
+  # JWT Configuration
+  JWT_PRIVATE_KEY_PATH: "/secrets/jwt/private.pem"
+  JWT_PUBLIC_KEY_PATH: "/secrets/jwt/public.pem"
+  JWT_ACCESS_TOKEN_EXPIRY: "15m"
+  JWT_REFRESH_TOKEN_EXPIRY: "7d"
+  JWT_ISSUER: "banking-auth-service"
+  JWT_AUDIENCE: "banking-api"
+  JWT_KEY_ROTATION_DAYS: "90"
+  JWT_KEY_GRACE_PERIOD_DAYS: "7"
+
+  # Security
+  BCRYPT_ROUNDS: "12"
+  PASSWORD_MIN_LENGTH: "12"
+  PASSWORD_HISTORY_COUNT: "12"
+  PASSWORD_EXPIRY_DAYS: "90"
+  MAX_LOGIN_ATTEMPTS: "7"
+  LOCKOUT_DURATION_MS: "900000"
+
+  # Session
+  MAX_CONCURRENT_SESSIONS: "5"
+  SESSION_EXPIRY_HOURS: "24"
+
+  # Rate Limiting
+  RATE_LIMIT_WINDOW_MS: "900000"
+  RATE_LIMIT_MAX_REQUESTS: "100"
+  EMAIL_RESEND_LIMIT_PER_EMAIL: "3"
+  EMAIL_RESEND_LIMIT_PER_IP: "5"
+  EMAIL_RESEND_WINDOW_HOURS: "1"
+
+  # MFA
+  MFA_ISSUER: "BankingApp"
+  MFA_BACKUP_CODES_COUNT: "10"
+
+  # Kafka
+  KAFKA_BROKERS: "kafka.banking.svc.cluster.local:9092"
+  KAFKA_CLIENT_ID: "banking-auth-service"
+  KAFKA_SECURITY_TOPIC: "security-events"
+
+  # Logging
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
