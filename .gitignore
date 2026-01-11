@@ -137,3 +137,10 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Security - NEVER commit these!
+keys/
+*.pem
+.secrets.backup
+k8s/secrets-*.yaml
+!k8s/secrets.yaml
