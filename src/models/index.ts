@@ -84,3 +84,7 @@ export { Device } from './Device';
 export { PasswordResetToken } from './PasswordResetToken';
 export { PasswordHistory } from './PasswordHistory';
 export { RefreshToken } from './RefreshToken';
+export { AuditLog, AuditEventType } from './AuditLog';
+export { EmailVerificationOTP } from './EmailVerificationOTP';
+export { SecurityEvent, SecurityEventSeverity, SecurityEventCategory } from './SecurityEvent';
+

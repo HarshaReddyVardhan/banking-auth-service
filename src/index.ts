@@ -8,9 +8,11 @@ import { initializeDatabase, closeDatabase } from './models/index';
 import authRoutes from './routes/authRoutes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { logger, createRequestLogData } from './middleware/requestLogger';
+import { auditLoggingMiddleware } from './middleware/auditLoggingMiddleware';
 import { eventPublisher } from './kafka/EventPublisher';
 import { sessionManager } from './services/SessionManager';
 import { rateLimiter } from './services/RateLimiter';
+import { tokenBlacklist } from './services/TokenBlacklist';
 
 // Create Express app
 const app = express();
@@ -94,6 +96,9 @@ app.use((req, res, next) => {
     next();
 });
 
+// Audit logging middleware (PCI-DSS compliance)
+app.use(auditLoggingMiddleware);
+
 // ==================== ROUTES ====================
 
 // Auth routes
@@ -133,6 +138,7 @@ async function shutdown(signal: string): Promise<void> {
             // Close Redis connections
             await sessionManager.close();
             await rateLimiter.close();
+            await tokenBlacklist.close();
 
             // Close Kafka producer
             await eventPublisher.disconnect();

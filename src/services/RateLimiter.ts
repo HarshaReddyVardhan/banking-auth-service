@@ -291,6 +291,74 @@ export class RateLimiter {
     }
 
     /**
+     * Check per-user rate limit (authenticated requests)
+     */
+    async checkUserRateLimit(userId: string): Promise<RateLimitResult> {
+        const key = `ratelimit:user:${userId}`;
+        const windowMs = config.rateLimit.windowMs;
+        const maxRequests = config.rateLimit.maxRequests * 2; // Higher limit for authenticated
+
+        const current = await this.redis.incr(key);
+
+        if (current === 1) {
+            await this.redis.pexpire(key, windowMs);
+        }
+
+        const ttl = await this.redis.pttl(key);
+        const remaining = Math.max(0, maxRequests - current);
+
+        if (current > maxRequests) {
+            return {
+                allowed: false,
+                remainingAttempts: 0,
+                retryAfterMs: ttl > 0 ? ttl : windowMs,
+                isLocked: false,
+            };
+        }
+
+        return {
+            allowed: true,
+            remainingAttempts: remaining,
+            retryAfterMs: 0,
+            isLocked: false,
+        };
+    }
+
+    /**
+     * Check per-JWT rate limit (prevents token abuse)
+     */
+    async checkJwtRateLimit(jti: string): Promise<RateLimitResult> {
+        const key = `ratelimit:jwt:${jti}`;
+        const windowMs = 60000; // 1 minute
+        const maxRequests = 60; // 60 requests/minute per token
+
+        const current = await this.redis.incr(key);
+
+        if (current === 1) {
+            await this.redis.pexpire(key, windowMs);
+        }
+
+        const ttl = await this.redis.pttl(key);
+        const remaining = Math.max(0, maxRequests - current);
+
+        if (current > maxRequests) {
+            return {
+                allowed: false,
+                remainingAttempts: 0,
+                retryAfterMs: ttl > 0 ? ttl : windowMs,
+                isLocked: false,
+            };
+        }
+
+        return {
+            allowed: true,
+            remainingAttempts: remaining,
+            retryAfterMs: 0,
+            isLocked: false,
+        };
+    }
+
+    /**
      * Close Redis connection
      */
     async close(): Promise<void> {
@@ -300,3 +368,4 @@ export class RateLimiter {
 
 // Export singleton instance
 export const rateLimiter = new RateLimiter();
+

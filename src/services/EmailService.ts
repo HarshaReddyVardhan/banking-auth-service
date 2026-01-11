@@ -6,76 +6,76 @@ import { logger } from '../middleware/requestLogger';
  * Email templates
  */
 interface EmailTemplate {
-    subject: string;
-    html: string;
-    text: string;
+  subject: string;
+  html: string;
+  text: string;
 }
 
 /**
  * Email Service for sending verification, reset, and alert emails
  */
 export class EmailService {
-    private transporter: nodemailer.Transporter | null = null;
+  private transporter: nodemailer.Transporter | null = null;
 
-    constructor() {
-        if (config.email.host) {
-            this.transporter = nodemailer.createTransport({
-                host: config.email.host,
-                port: config.email.port,
-                secure: config.email.port === 465,
-                auth: {
-                    user: config.email.user,
-                    pass: config.email.password,
-                },
-            });
-        } else {
-            logger.warn('Email service not configured - emails will be logged only');
-        }
+  constructor() {
+    if (config.email.host) {
+      this.transporter = nodemailer.createTransport({
+        host: config.email.host,
+        port: config.email.port,
+        secure: config.email.port === 465,
+        auth: {
+          user: config.email.user,
+          pass: config.email.password,
+        },
+      });
+    } else {
+      logger.warn('Email service not configured - emails will be logged only');
+    }
+  }
+
+  /**
+   * Send email (or log in development)
+   */
+  private async send(to: string, template: EmailTemplate): Promise<boolean> {
+    const mailOptions = {
+      from: config.email.from,
+      to,
+      subject: template.subject,
+      html: template.html,
+      text: template.text,
+    };
+
+    if (!this.transporter) {
+      // Log email in development
+      logger.info('Email would be sent', {
+        to: to.replace(/(.{2}).*(@.*)/, '$1***$2'),
+        subject: template.subject,
+      });
+      return true;
     }
 
-    /**
-     * Send email (or log in development)
-     */
-    private async send(to: string, template: EmailTemplate): Promise<boolean> {
-        const mailOptions = {
-            from: config.email.from,
-            to,
-            subject: template.subject,
-            html: template.html,
-            text: template.text,
-        };
-
-        if (!this.transporter) {
-            // Log email in development
-            logger.info('Email would be sent', {
-                to: to.replace(/(.{2}).*(@.*)/, '$1***$2'),
-                subject: template.subject,
-            });
-            return true;
-        }
-
-        try {
-            await this.transporter.sendMail(mailOptions);
-            logger.info('Email sent', {
-                to: to.replace(/(.{2}).*(@.*)/, '$1***$2'),
-                subject: template.subject,
-            });
-            return true;
-        } catch (error) {
-            logger.error('Failed to send email', { error, to: to.replace(/(.{2}).*(@.*)/, '$1***$2') });
-            return false;
-        }
+    try {
+      await this.transporter.sendMail(mailOptions);
+      logger.info('Email sent', {
+        to: to.replace(/(.{2}).*(@.*)/, '$1***$2'),
+        subject: template.subject,
+      });
+      return true;
+    } catch (error) {
+      logger.error('Failed to send email', { error, to: to.replace(/(.{2}).*(@.*)/, '$1***$2') });
+      return false;
     }
+  }
 
-    /**
-     * Send email verification link
-     */
-    async sendVerificationEmail(email: string, token: string, expiresInHours: number = 24): Promise<boolean> {
-        const verificationUrl = `${process.env['APP_URL'] ?? 'https://app.example.com'}/verify-email?token=${token}`;
+  /**
+   * Send email verification link
+   */
+  async sendVerificationEmail(email: string, token: string, expiresInHours: number = 24): Promise<boolean> {
+    const verificationUrl = `${process.env['APP_URL'] ?? 'https://app.example.com'}/verify-email?token=${token}`;
 
-        const template: EmailTemplate = {
-            subject: 'Verify Your Email - Banking App',
-            html: `
+    const template: EmailTemplate = {
+      subject: 'Verify Your Email - Banking App',
+      html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h1 style="color: #333;">Verify Your Email</h1>
           <p>Please verify your email address by clicking the button below:</p>
@@ -94,21 +94,21 @@ export class EmailService {
           </p>
         </div>
       `,
-            text: `Verify your email by visiting: ${verificationUrl}\n\nThis link expires in ${expiresInHours} hours.`,
-        };
+      text: `Verify your email by visiting: ${verificationUrl}\n\nThis link expires in ${expiresInHours} hours.`,
+    };
 
-        return this.send(email, template);
-    }
+    return this.send(email, template);
+  }
 
-    /**
-     * Send password reset link
-     */
-    async sendPasswordResetEmail(email: string, token: string, expiresInMinutes: number = 60): Promise<boolean> {
-        const resetUrl = `${process.env['APP_URL'] ?? 'https://app.example.com'}/reset-password?token=${token}`;
+  /**
+   * Send password reset link
+   */
+  async sendPasswordResetEmail(email: string, token: string, expiresInMinutes: number = 60): Promise<boolean> {
+    const resetUrl = `${process.env['APP_URL'] ?? 'https://app.example.com'}/reset-password?token=${token}`;
 
-        const template: EmailTemplate = {
-            subject: 'Password Reset Request - Banking App',
-            html: `
+    const template: EmailTemplate = {
+      subject: 'Password Reset Request - Banking App',
+      html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h1 style="color: #333;">Password Reset Request</h1>
           <p>We received a request to reset your password. Click the button below to proceed:</p>
@@ -127,25 +127,25 @@ export class EmailService {
           </p>
         </div>
       `,
-            text: `Reset your password by visiting: ${resetUrl}\n\nThis link expires in ${expiresInMinutes} minutes.\n\nIf you didn't request this, ignore this email.`,
-        };
+      text: `Reset your password by visiting: ${resetUrl}\n\nThis link expires in ${expiresInMinutes} minutes.\n\nIf you didn't request this, ignore this email.`,
+    };
 
-        return this.send(email, template);
-    }
+    return this.send(email, template);
+  }
 
-    /**
-     * Send login alert for new device/location
-     */
-    async sendLoginAlert(
-        email: string,
-        device: string,
-        ip: string,
-        location: string,
-        time: Date
-    ): Promise<boolean> {
-        const template: EmailTemplate = {
-            subject: '⚠️ New Login Detected - Banking App',
-            html: `
+  /**
+   * Send login alert for new device/location
+   */
+  async sendLoginAlert(
+    email: string,
+    device: string,
+    ip: string,
+    location: string,
+    time: Date
+  ): Promise<boolean> {
+    const template: EmailTemplate = {
+      subject: '⚠️ New Login Detected - Banking App',
+      html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h1 style="color: #333;">New Login to Your Account</h1>
           <p>We detected a new login to your account:</p>
@@ -172,19 +172,19 @@ export class EmailService {
           </p>
         </div>
       `,
-            text: `New login detected:\nDevice: ${device}\nLocation: ${location}\nIP: ${ip}\nTime: ${time.toISOString()}\n\nIf this wasn't you, change your password immediately.`,
-        };
+      text: `New login detected:\nDevice: ${device}\nLocation: ${location}\nIP: ${ip}\nTime: ${time.toISOString()}\n\nIf this wasn't you, change your password immediately.`,
+    };
 
-        return this.send(email, template);
-    }
+    return this.send(email, template);
+  }
 
-    /**
-     * Send MFA enabled notification
-     */
-    async sendMFAEnabledNotification(email: string): Promise<boolean> {
-        const template: EmailTemplate = {
-            subject: '✓ Two-Factor Authentication Enabled - Banking App',
-            html: `
+  /**
+   * Send MFA enabled notification
+   */
+  async sendMFAEnabledNotification(email: string): Promise<boolean> {
+    const template: EmailTemplate = {
+      subject: '✓ Two-Factor Authentication Enabled - Banking App',
+      html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h1 style="color: #28a745;">Two-Factor Authentication Enabled</h1>
           <p>Two-factor authentication has been successfully enabled on your account.</p>
@@ -194,19 +194,19 @@ export class EmailService {
           </p>
         </div>
       `,
-            text: `Two-factor authentication has been enabled on your account. If you didn't make this change, contact support immediately.`,
-        };
+      text: `Two-factor authentication has been enabled on your account. If you didn't make this change, contact support immediately.`,
+    };
 
-        return this.send(email, template);
-    }
+    return this.send(email, template);
+  }
 
-    /**
-     * Send password changed notification
-     */
-    async sendPasswordChangedNotification(email: string, ip: string): Promise<boolean> {
-        const template: EmailTemplate = {
-            subject: '⚠️ Password Changed - Banking App',
-            html: `
+  /**
+   * Send password changed notification
+   */
+  async sendPasswordChangedNotification(email: string, ip: string): Promise<boolean> {
+    const template: EmailTemplate = {
+      subject: '⚠️ Password Changed - Banking App',
+      html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h1 style="color: #333;">Your Password Has Been Changed</h1>
           <p>Your account password was changed from IP address: <strong>${ip}</strong></p>
@@ -216,12 +216,76 @@ export class EmailService {
           </p>
         </div>
       `,
-            text: `Your password has been changed from IP: ${ip}. If you didn't make this change, contact support immediately.`,
-        };
+      text: `Your password has been changed from IP: ${ip}. If you didn't make this change, contact support immediately.`,
+    };
 
-        return this.send(email, template);
-    }
+    return this.send(email, template);
+  }
+
+  /**
+   * Send security alert email (for token theft, suspicious activity)
+   */
+  async sendSecurityAlertEmail(
+    email: string,
+    title: string,
+    message: string
+  ): Promise<boolean> {
+    const template: EmailTemplate = {
+      subject: `🚨 Security Alert: ${title} - Banking App`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #dc3545;">🚨 Security Alert</h1>
+          <h2 style="color: #333;">${title}</h2>
+          <p>${message}</p>
+          <p style="color: #dc3545; font-weight: bold;">
+            If you did not initiate this action, we recommend you immediately:
+          </p>
+          <ol>
+            <li>Reset your password</li>
+            <li>Review your recent account activity</li>
+            <li>Enable two-factor authentication if not already enabled</li>
+            <li>Contact support if you notice any unauthorized activity</li>
+          </ol>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+          <p style="color: #999; font-size: 12px;">
+            This is an automated security notification. Please do not reply to this email.
+          </p>
+        </div>
+      `,
+      text: `Security Alert: ${title}\n\n${message}\n\nIf you did not initiate this action, please reset your password immediately.`,
+    };
+
+    return this.send(email, template);
+  }
+
+  /**
+   * Send OTP email for verification
+   */
+  async sendOTPEmail(email: string, otp: string, expiresInMinutes: number = 15): Promise<boolean> {
+    const template: EmailTemplate = {
+      subject: 'Your Verification Code - Banking App',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #333;">Verification Code</h1>
+          <p>Your verification code is:</p>
+          <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; padding: 24px; background: #f5f5f5; text-align: center; margin: 16px 0;">
+            ${otp}
+          </div>
+          <p style="color: #666; font-size: 14px;">
+            This code will expire in ${expiresInMinutes} minutes.
+          </p>
+          <p style="color: #666; font-size: 14px;">
+            If you didn't request this code, please ignore this email.
+          </p>
+        </div>
+      `,
+      text: `Your verification code is: ${otp}\n\nThis code expires in ${expiresInMinutes} minutes.`,
+    };
+
+    return this.send(email, template);
+  }
 }
 
 // Export singleton
 export const emailService = new EmailService();
+

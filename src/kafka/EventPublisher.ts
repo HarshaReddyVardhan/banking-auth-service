@@ -23,7 +23,8 @@ export type SecurityEventType =
     | 'jwt.key.rotated'
     | 'security.token_theft'
     | 'security.anomaly_detected'
-    | 'security.account_compromised';
+    | 'security.account_compromised'
+    | 'security.all_tokens_revoked';
 
 /**
  * Base event structure
