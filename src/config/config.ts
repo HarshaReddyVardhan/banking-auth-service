@@ -27,14 +27,30 @@ function optionalEnvBool(name: string, defaultValue: boolean): boolean {
 
 // Load JWT keys from files or environment
 function loadJWTKey(keyPath: string | undefined, keyEnvVar: string): string {
-    if (keyPath && fs.existsSync(keyPath)) {
-        return fs.readFileSync(keyPath, 'utf8');
+    // Priority 1: Try loading from file path (Kubernetes mount)
+    if (keyPath) {
+        const resolvedPath = path.resolve(keyPath);
+        if (fs.existsSync(resolvedPath)) {
+            const key = fs.readFileSync(resolvedPath, 'utf8');
+            if (!key.trim()) {
+                throw new Error(`JWT key file is empty: ${resolvedPath}`);
+            }
+            return key;
+        }
     }
+
+    // Priority 2: Try loading from environment variable
     const envKey = process.env[keyEnvVar];
     if (envKey) {
-        return envKey.replace(/\\n/g, '\n');
+        return envKey.replace(/\\n/g, '\n').trim();
     }
-    throw new Error(`JWT key not found: ${keyPath || keyEnvVar}`);
+
+    // Priority 3: Fail with clear error
+    throw new Error(
+        `JWT key not found. Tried:\n` +
+        `  1. File path: ${keyPath || 'not provided'}\n` +
+        `  2. Environment variable: ${keyEnvVar}`
+    );
 }
 
 export const config = {
