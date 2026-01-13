@@ -30,6 +30,9 @@ app.use(helmet({
             scriptSrc: ["'self'"],
             styleSrc: ["'self'"],
             imgSrc: ["'self'", 'data:'],
+            frameAncestors: ["'none'"], // Clickjacking protection
+            formAction: ["'self'"], // Form submission protection
+            upgradeInsecureRequests: [], // Upgrade HTTP to HTTPS
         },
     },
     hsts: {
@@ -38,6 +41,12 @@ app.use(helmet({
         preload: true,
     },
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    noSniff: true, // X-Content-Type-Options: nosniff
+    xssFilter: true, // X-XSS-Protection (legacy browsers)
+    dnsPrefetchControl: { allow: false }, // X-DNS-Prefetch-Control: off
+    permittedCrossDomainPolicies: { permittedPolicies: 'none' }, // X-Permitted-Cross-Domain-Policies
+    frameguard: { action: 'deny' }, // X-Frame-Options: DENY
+    originAgentCluster: true, // Origin-Agent-Cluster header
 }));
 
 // CORS configuration
@@ -57,6 +66,17 @@ app.use(compression());
 // Body parsing
 app.use(express.json({ limit: '10kb' })); // Limit body size
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
+// ==================== INPUT SANITIZATION ====================
+// Import inline to avoid circular dependency issues
+import { sanitizationMiddleware } from './middleware/sanitizationMiddleware';
+import { securityHeadersMiddleware } from './middleware/securityHeadersMiddleware';
+
+// Sanitize all incoming requests (XSS/Injection prevention)
+app.use(sanitizationMiddleware);
+
+// Additional security headers (cache control, permissions policy, CORP, COOP, COEP)
+app.use(securityHeadersMiddleware);
 
 // ==================== REQUEST LOGGING ====================
 
