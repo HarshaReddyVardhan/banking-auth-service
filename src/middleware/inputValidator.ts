@@ -64,6 +64,24 @@ export const validationSchemas = {
         }).optional(),
     }),
 
+    mfaLogin: Joi.object({
+        tempToken: Joi.string().hex().length(64).required(),
+        mfaToken: mfaTokenSchema.required(),
+        deviceFingerprint: Joi.object({
+            userAgent: Joi.string().required(),
+            screenResolution: Joi.string().optional(),
+            timezone: Joi.string().optional(),
+            language: Joi.string().optional(),
+            platform: Joi.string().optional(),
+            colorDepth: Joi.number().optional(),
+            hardwareConcurrency: Joi.number().optional(),
+            deviceMemory: Joi.number().optional(),
+            canvas: Joi.string().optional(),
+            webgl: Joi.string().optional(),
+            audioContext: Joi.string().optional(),
+        }).optional(),
+    }),
+
     verifyEmail: Joi.object({
         token: Joi.string().hex().length(64).required(),
     }),
