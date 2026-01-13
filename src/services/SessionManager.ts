@@ -336,6 +336,32 @@ export class SessionManager {
     }
 
     /**
+     * Store a temporary token (e.g., for MFA completion or password reset)
+     */
+    async setTempToken(token: string, data: Record<string, unknown>, ttlSeconds: number = 300): Promise<void> {
+        const key = `${this.sessionPrefix}temp:${token}`;
+        await this.redis.setex(key, ttlSeconds, JSON.stringify(data));
+    }
+
+    /**
+     * Retrieve and optionally delete a temporary token
+     */
+    async getTempToken(token: string, deleteAfterRead: boolean = true): Promise<Record<string, unknown> | null> {
+        const key = `${this.sessionPrefix}temp:${token}`;
+        const data = await this.redis.get(key);
+
+        if (!data) {
+            return null;
+        }
+
+        if (deleteAfterRead) {
+            await this.redis.del(key);
+        }
+
+        return JSON.parse(data);
+    }
+
+    /**
      * Close Redis connection
      */
     async close(): Promise<void> {
