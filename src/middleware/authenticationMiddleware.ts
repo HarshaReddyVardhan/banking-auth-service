@@ -3,6 +3,7 @@ import { jwtHandler, TokenExpiredError, TokenVerificationError } from '../utils/
 import { sessionManager } from '../services/SessionManager';
 import { tokenBlacklist } from '../services/TokenBlacklist';
 import { rateLimiter } from '../services/RateLimiter';
+import { ipBlockingService } from '../services/IPBlockingService';
 import { Errors } from './errorHandler';
 import { logger } from './requestLogger';
 import crypto from 'crypto';
@@ -33,6 +34,7 @@ function getClientIp(req: Request): string {
 
 /**
  * Authentication Middleware
+ * - check IP against blocklist
  * - Verifies JWT token
  * - Checks token blacklist for revocation
  * - Validates session is still active
@@ -44,6 +46,13 @@ export async function authenticationMiddleware(
     next: NextFunction
 ): Promise<void> {
     try {
+        // Check IP blocking first (Fastest reject)
+        const ip = getClientIp(req);
+        const ipBlock = await ipBlockingService.isBlocked(ip);
+        if (ipBlock.blocked) {
+            throw Errors.forbidden(`Access Denied: IP blocked for security reasons. Reason: ${ipBlock.reason}`);
+        }
+
         const authHeader = req.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
