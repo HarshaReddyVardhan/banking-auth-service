@@ -14,6 +14,7 @@ import { mfaService } from './MFAService';
 import { deviceManager, DeviceFingerprintData } from './DeviceManager';
 import { breachChecker } from './BreachChecker';
 import { anomalyDetector } from './AnomalyDetector';
+import { ipBlockingService } from './IPBlockingService';
 import { eventPublisher } from '../kafka/EventPublisher';
 import { config } from '../config/config';
 import { logger, securityLogger } from '../middleware/requestLogger';
@@ -70,6 +71,15 @@ export class AuthService {
         const { email, password } = request;
 
         try {
+            // Check if IP is blocked
+            const ipBlockStatus = await ipBlockingService.isBlocked(ip);
+            if (ipBlockStatus.blocked) {
+                return {
+                    success: false,
+                    error: `Access temporarily blocked. Try again in ${Math.ceil((ipBlockStatus.expiresIn ?? 3600) / 60)} minutes`,
+                };
+            }
+
             // Check if email already exists
             const existingUser = await User.findOne({
                 where: { email: email.toLowerCase() },
@@ -128,12 +138,14 @@ export class AuthService {
                 userId: user.id,
                 email: email.replace(/(.{2}).*(@.*)/, '$1***$2'),
                 ip,
+                userAgent,
                 timestamp: new Date().toISOString(),
             });
 
             logger.info('User registered successfully', {
                 userId: user.id,
                 email: email.replace(/(.{2}).*(@.*)/, '$1***$2'),
+                userAgent,
             });
 
             return { success: true, userId: user.id };
@@ -186,6 +198,15 @@ export class AuthService {
         email: string,
         ip: string
     ): Promise<{ success: boolean; error?: string }> {
+        // Check if IP is blocked
+        const ipBlockStatus = await ipBlockingService.isBlocked(ip);
+        if (ipBlockStatus.blocked) {
+            return {
+                success: false,
+                error: `Access temporarily blocked. Try again in ${Math.ceil((ipBlockStatus.expiresIn ?? 3600) / 60)} minutes`,
+            };
+        }
+
         // Check rate limit
         const rateLimit = await rateLimiter.checkEmailResendLimit(email, ip);
         if (!rateLimit.allowed) {
@@ -233,6 +254,16 @@ export class AuthService {
         const { email, password, mfaToken, deviceFingerprint } = request;
 
         try {
+            // Check if IP is blocked (cross-account brute force protection)
+            const ipBlockStatus = await ipBlockingService.isBlocked(ip);
+            if (ipBlockStatus.blocked) {
+                logger.warn('Login attempt from blocked IP', { ip, reason: ipBlockStatus.reason });
+                return {
+                    success: false,
+                    error: `Access temporarily blocked. Try again in ${Math.ceil((ipBlockStatus.expiresIn ?? 3600) / 60)} minutes`,
+                };
+            }
+
             // Check rate limit
             const rateLimit = await rateLimiter.checkLoginAttempt(email);
             if (!rateLimit.allowed) {
@@ -264,6 +295,7 @@ export class AuthService {
 
             if (!user) {
                 await rateLimiter.recordFailedLogin(email);
+                await ipBlockingService.recordFailedAttempt(ip, email);
                 await anomalyDetector.recordLoginAttempt(
                     null,
                     email,
@@ -291,6 +323,7 @@ export class AuthService {
             if (!passwordValid) {
                 const { isNowLocked } = await rateLimiter.recordFailedLogin(email);
                 await user.incrementFailedAttempts();
+                await ipBlockingService.recordFailedAttempt(ip, email);
 
                 await anomalyDetector.recordLoginAttempt(
                     user.id,
@@ -385,10 +418,10 @@ export class AuthService {
                 const mfaSecret = user.getDecryptedMfaSecret();
                 if (!mfaSecret || !mfaService.verifyToken(mfaSecret, mfaToken)) {
                     // Try backup codes
-                    const backupCodes = user.getBackupCodes();
                     const backupValid = await user.useBackupCode(mfaToken);
 
                     if (!backupValid) {
+                        await ipBlockingService.recordFailedAttempt(ip, email);
                         await anomalyDetector.recordLoginAttempt(
                             user.id,
                             email,
@@ -410,6 +443,7 @@ export class AuthService {
 
             // Clear failed attempts
             await rateLimiter.clearLoginAttempts(email);
+            await ipBlockingService.clearFailedAttempts(ip);
             await user.resetFailedAttempts();
 
             // Register/update device
@@ -560,6 +594,16 @@ export class AuthService {
         userAgent: string
     ): Promise<{ success: boolean; tokens?: TokenPair; error?: string }> {
         try {
+            // Check if IP is blocked
+            const ipBlockStatus = await ipBlockingService.isBlocked(ip);
+            if (ipBlockStatus.blocked) {
+                logger.warn('Token refresh attempt from blocked IP', { ip, reason: ipBlockStatus.reason });
+                return {
+                    success: false,
+                    error: `Access temporarily blocked`
+                };
+            }
+
             // Verify refresh token JWT
             const payload = jwtHandler.verifyRefreshToken(refreshToken);
 
@@ -657,6 +701,16 @@ export class AuthService {
         userAgent: string
     ): Promise<{ success: boolean }> {
         try {
+            // Check if IP is blocked
+            const ipBlockStatus = await ipBlockingService.isBlocked(ip);
+            if (ipBlockStatus.blocked) {
+                // Silently fail for privacy vs security balance, or return specific error?
+                // For forgot password, we should probably just return success to not leak state,
+                // but we definitely shouldn't send the email.
+                logger.warn('Forgot password attempt from blocked IP', { ip, email: email.replace(/(.{2}).*(@.*)/, '$1***$2') });
+                return { success: true };
+            }
+
             const user = await User.findOne({
                 where: { email: email.toLowerCase() },
             });
