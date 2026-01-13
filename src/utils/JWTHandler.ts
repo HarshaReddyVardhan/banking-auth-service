@@ -142,17 +142,18 @@ export class JWTHandler {
     signAccessToken(payload: Omit<AccessTokenPayload, 'type' | 'iat' | 'exp' | 'iss' | 'aud'>): string {
         const key = this.getActiveKey();
 
-        const fullPayload: AccessTokenPayload = {
+        const fullPayload = {
             ...payload,
-            type: 'access',
-        };
+            type: 'access' as const,
+        } as AccessTokenPayload;
 
         const options: SignOptions = {
             algorithm: this.algorithm,
-            expiresIn: config.jwt.accessTokenExpiry,
+            expiresIn: config.jwt.accessTokenExpiry as jwt.SignOptions['expiresIn'],
             issuer: config.jwt.issuer,
             audience: config.jwt.audience,
             keyid: key.kid,
+            jwtid: crypto.randomUUID(), // JTI for replay attack prevention and per-JWT rate limiting
         };
 
         return jwt.sign(fullPayload, key.privateKey, options);
@@ -164,14 +165,14 @@ export class JWTHandler {
     signRefreshToken(payload: Omit<RefreshTokenPayload, 'type' | 'iat' | 'exp' | 'iss' | 'aud'>): string {
         const key = this.getActiveKey();
 
-        const fullPayload: RefreshTokenPayload = {
+        const fullPayload = {
             ...payload,
-            type: 'refresh',
-        };
+            type: 'refresh' as const,
+        } as RefreshTokenPayload;
 
         const options: SignOptions = {
             algorithm: this.algorithm,
-            expiresIn: config.jwt.refreshTokenExpiry,
+            expiresIn: config.jwt.refreshTokenExpiry as jwt.SignOptions['expiresIn'],
             issuer: config.jwt.issuer,
             audience: config.jwt.audience,
             keyid: key.kid,
