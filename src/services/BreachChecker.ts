@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import fetch from 'node-fetch';
 import { config } from '../config/config';
 import { logger } from '../middleware/requestLogger';
 
@@ -37,6 +36,10 @@ export class BreachChecker {
             const prefix = sha1Hash.substring(0, 5);
             const suffix = sha1Hash.substring(5);
 
+            // Timeout controller
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
             // Query HaveIBeenPwned API
             const response = await fetch(`${this.hibpApiUrl}${prefix}`, {
                 headers: {
@@ -44,8 +47,8 @@ export class BreachChecker {
                     // Add API key if available for enhanced rate limits
                     ...(config.hibp.apiKey ? { 'hibp-api-key': config.hibp.apiKey } : {}),
                 },
-                timeout: 5000, // 5 second timeout
-            });
+                signal: controller.signal,
+            }).finally(() => clearTimeout(timeoutId));
 
             if (!response.ok) {
                 logger.warn('HIBP API returned non-OK status', { status: response.status });
