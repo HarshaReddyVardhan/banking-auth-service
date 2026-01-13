@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { Op } from 'sequelize';
+import { Op, UniqueConstraintError } from 'sequelize';
 import { User, UserStatus, KycStatus } from '../models/User';
 import { PasswordHistory } from '../models/PasswordHistory';
 import { PasswordResetToken } from '../models/PasswordResetToken';
@@ -150,6 +150,9 @@ export class AuthService {
 
             return { success: true, userId: user.id };
         } catch (error) {
+            if (error instanceof UniqueConstraintError) {
+                return { success: false, error: 'Email already registered' };
+            }
             logger.error('Registration error', { error });
             return { success: false, error: 'Registration failed. Please try again.' };
         }
@@ -397,7 +400,7 @@ export class AuthService {
                     // MFA required but not provided - return temporary token
                     const tempToken = crypto.randomBytes(32).toString('hex');
                     // Store temp token in Redis with short TTL (5 min)
-                    // In production, implement proper temp token storage
+                    await sessionManager.setTempToken(tempToken, { userId: user.id }, 300);
 
                     await anomalyDetector.recordLoginAttempt(
                         user.id,
@@ -544,6 +547,126 @@ export class AuthService {
             };
         } catch (error) {
             logger.error('Login error', { error });
+            return { success: false, error: 'Login failed' };
+        }
+    }
+
+    /**
+     * Verify MFA and complete login
+     */
+    async verifyMfaLogin(
+        tempToken: string,
+        mfaToken: string,
+        ip: string,
+        userAgent: string,
+        deviceFingerprint?: DeviceFingerprintData
+    ): Promise<LoginResponse> {
+        try {
+            // Retrieve temp token
+            const data = await sessionManager.getTempToken(tempToken);
+            if (!data || !data.userId) {
+                return { success: false, error: 'Invalid or expired login session. Please login again.' };
+            }
+
+            const userId = data.userId as string;
+            const user = await User.findByPk(userId);
+
+            if (!user) {
+                return { success: false, error: 'User not found' };
+            }
+
+            // Verify MFA
+            const mfaSecret = user.getDecryptedMfaSecret();
+            let mfaValid = false;
+
+            if (mfaSecret && mfaService.verifyToken(mfaSecret, mfaToken)) {
+                mfaValid = true;
+            } else {
+                // Try backup codes
+                mfaValid = await user.useBackupCode(mfaToken);
+            }
+
+            if (!mfaValid) {
+                await ipBlockingService.recordFailedAttempt(ip, user.email);
+                return { success: false, error: 'Invalid MFA code' };
+            }
+
+            // Clear failed attempts
+            await rateLimiter.clearLoginAttempts(user.email);
+            await ipBlockingService.clearFailedAttempts(ip);
+            await user.resetFailedAttempts();
+
+            // Register/update device
+            let deviceId: string | undefined;
+            if (deviceFingerprint) {
+                const device = await deviceManager.registerDevice(
+                    user.id,
+                    deviceFingerprint,
+                    ip
+                );
+                deviceId = device.id;
+            }
+
+            // Create session
+            const sessionId = await sessionManager.createSession(
+                user.id,
+                user.email,
+                ip,
+                userAgent,
+                deviceId,
+                deviceFingerprint ? deviceManager.generateFingerprint(deviceFingerprint) : undefined
+            );
+
+            // Generate token family
+            const familyId = RefreshToken.generateFamilyId();
+
+            // Generate tokens
+            const tokens = jwtHandler.generateTokenPair(
+                user.id,
+                user.email,
+                sessionId,
+                familyId,
+                deviceId
+            );
+
+            // Store refresh token
+            await RefreshToken.create({
+                userId: user.id,
+                familyId,
+                tokenHash: RefreshToken.hashToken(tokens.refreshToken),
+                sessionId,
+                deviceId,
+                expiresAt: tokens.refreshTokenExpiresAt,
+                issuedIp: ip,
+                issuedUserAgent: userAgent,
+            });
+
+            // Update user login info
+            await user.recordLogin(ip, deviceId ?? '');
+
+            // Log success
+            await eventPublisher.publish('user.login.success', {
+                userId: user.id,
+                ip,
+                method: 'mfa',
+                timestamp: new Date().toISOString(),
+            });
+
+            return {
+                success: true,
+                tokens,
+                sessionId,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    emailVerified: user.emailVerified,
+                    mfaEnabled: user.mfaEnabled,
+                    kycStatus: user.kycStatus,
+                },
+            };
+
+        } catch (error) {
+            logger.error('MFA Login error', { error });
             return { success: false, error: 'Login failed' };
         }
     }
