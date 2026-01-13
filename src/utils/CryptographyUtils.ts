@@ -147,3 +147,65 @@ export function maskSensitiveData(data: string, visibleChars: number = 4): strin
     }
     return data.slice(0, visibleChars) + '*'.repeat(data.length - visibleChars * 2) + data.slice(-visibleChars);
 }
+
+/**
+ * Decrypt legacy data encrypted with CryptoJS (AES-CBC)
+ * using native Node.js crypto
+ */
+export function decryptLegacyField(encrypted: string): string {
+    const key = config.security.fieldEncryptionKey; // This was used as passphrase in CryptoJS
+
+    // CryptoJS default format: "Salted__" + 8 bytes salt + ciphertext (base64)
+    const buffer = Buffer.from(encrypted, 'base64');
+
+    // Check for "Salted__" header (OpenSSL format)
+    const saltHeader = buffer.subarray(0, 8);
+    if (saltHeader.toString('utf8') !== 'Salted__') {
+        // If not salted or different format, try direct decryption or return as is
+        // But for this specific migration, we assume standard CryptoJS format
+        return encrypted;
+    }
+
+    const salt = buffer.subarray(8, 16);
+    const ciphertext = buffer.subarray(16);
+
+    // Derive key and IV using OpenSSL compatible KDF (EVP_BytesToKey)
+    // CryptoJS uses MD5, 1 iteration by default
+    const kdf = evpBytesToKey(key, salt, 32, 16);
+
+    const decipher = crypto.createDecipheriv('aes-256-cbc', kdf.key, kdf.iv);
+    let decrypted = decipher.update(ciphertext);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+
+    return decrypted.toString('utf8');
+}
+
+/**
+ * OpenSSL's EVP_BytesToKey implementation (MD5)
+ * Used for compatibility with CryptoJS default key derivation
+ */
+function evpBytesToKey(password: string, salt: Buffer, keyLen: number, ivLen: number): { key: Buffer, iv: Buffer } {
+    const passwordBuffer = Buffer.from(password, 'utf8');
+    const requiredLen = keyLen + ivLen;
+    let currentHash = Buffer.alloc(0);
+    let result = Buffer.alloc(0);
+
+    while (result.length < requiredLen) {
+        const hash = crypto.createHash('md5');
+
+        if (currentHash.length > 0) {
+            hash.update(currentHash);
+        }
+
+        hash.update(passwordBuffer);
+        hash.update(salt);
+
+        currentHash = hash.digest();
+        result = Buffer.concat([result, currentHash]);
+    }
+
+    return {
+        key: result.subarray(0, keyLen),
+        iv: result.subarray(keyLen, keyLen + ivLen)
+    };
+}
