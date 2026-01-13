@@ -6,8 +6,12 @@ import {
     CreationOptional,
 } from 'sequelize';
 import { sequelize } from './index';
-import CryptoJS from 'crypto-js';
-import { encryptField as secureEncrypt, decryptField as secureDecrypt } from '../utils/CryptographyUtils';
+// CryptoJS removed - using native crypto implementation
+import {
+    encryptField as secureEncrypt,
+    decryptField as secureDecrypt,
+    decryptLegacyField
+} from '../utils/CryptographyUtils';
 import { config } from '../config/config';
 
 // Encryption helpers for sensitive fields
@@ -24,9 +28,7 @@ function decryptField(encrypted: string): string {
 
     // Legacy format (CryptoJS AES-CBC)
     try {
-        const bytes = CryptoJS.AES.decrypt(encrypted, config.security.fieldEncryptionKey);
-        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-        return decrypted || encrypted;
+        return decryptLegacyField(encrypted);
     } catch {
         return encrypted;
     }
@@ -272,8 +274,19 @@ User.init(
             allowNull: true,
         },
         kycDocumentId: {
-            type: DataTypes.STRING(255),
+            type: DataTypes.TEXT, // Encrypted
             allowNull: true,
+            get() {
+                const rawValue = this.getDataValue('kycDocumentId');
+                return rawValue ? decryptField(rawValue) : null;
+            },
+            set(value: string | null) {
+                if (value) {
+                    this.setDataValue('kycDocumentId', encryptField(value));
+                } else {
+                    this.setDataValue('kycDocumentId', null);
+                }
+            }
         },
         mfaEnabled: {
             type: DataTypes.BOOLEAN,
