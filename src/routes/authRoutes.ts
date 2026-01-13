@@ -182,6 +182,42 @@ router.post(
 );
 
 /**
+ * POST /auth/login/mfa
+ * Complete login with MFA
+ */
+router.post(
+    '/login/mfa',
+    validate('mfaLogin'),
+    asyncHandler(async (req: Request, res: Response) => {
+        // Check IP rate limit
+        const ipLimit = await rateLimiter.checkIpRateLimit(getClientIp(req));
+        if (!ipLimit.allowed) {
+            res.status(429).json({
+                success: false,
+                error: 'Too many requests. Please try again later.',
+                retryAfter: Math.ceil(ipLimit.retryAfterMs / 1000),
+            });
+            return;
+        }
+
+        const result = await authService.verifyMfaLogin(
+            req.body.tempToken,
+            req.body.mfaToken,
+            getClientIp(req),
+            getUserAgent(req),
+            req.body.deviceFingerprint
+        );
+
+        if (!result.success) {
+            res.status(401).json(result);
+            return;
+        }
+
+        res.json(result);
+    })
+);
+
+/**
  * POST /auth/forgot-password
  * Request password reset
  */
