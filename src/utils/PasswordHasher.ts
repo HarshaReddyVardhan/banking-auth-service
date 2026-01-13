@@ -78,8 +78,39 @@ export class PasswordHasher {
             errors.push('Password cannot consist of repeated characters');
         }
 
+        // Check for numeric sequences
         if (/^(012|123|234|345|456|567|678|789|890)+$/.test(password)) {
             errors.push('Password cannot be a simple sequence');
+        }
+
+        // Check for keyboard patterns (qwerty, etc.)
+        const keyboardPatterns = [
+            'qwerty', 'qwertz', 'azerty', 'asdf', 'zxcv', 'qazwsx', 'poiuy',
+            '1qaz', '2wsx', '3edc', '4rfv', '5tgb', '6yhn', '7ujm', '8ik', '9ol',
+        ];
+        const lowerPassword = password.toLowerCase();
+        for (const pattern of keyboardPatterns) {
+            if (lowerPassword.includes(pattern) || lowerPassword.includes(pattern.split('').reverse().join(''))) {
+                errors.push('Password cannot contain keyboard patterns');
+                break;
+            }
+        }
+
+        // Check for sequential letters (abc, xyz, etc.)
+        if (/abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz/i.test(password)) {
+            errors.push('Password cannot contain sequential letters');
+        }
+
+        // Check for common password patterns
+        const commonPatterns = [
+            'password', 'passwd', 'pass', 'admin', 'login', 'welcome', 'master',
+            'letmein', 'trustno1', 'dragon', 'monkey', 'shadow', 'sunshine',
+        ];
+        for (const pattern of commonPatterns) {
+            if (lowerPassword.includes(pattern)) {
+                errors.push('Password contains a commonly used word');
+                break;
+            }
         }
 
         if (errors.length > 0) {
