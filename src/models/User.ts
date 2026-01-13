@@ -7,16 +7,29 @@ import {
 } from 'sequelize';
 import { sequelize } from './index';
 import CryptoJS from 'crypto-js';
+import { encryptField as secureEncrypt, decryptField as secureDecrypt } from '../utils/CryptographyUtils';
 import { config } from '../config/config';
 
 // Encryption helpers for sensitive fields
+// Supports migration from CryptoJS to native AES-256-GCM
 function encryptField(value: string): string {
-    return CryptoJS.AES.encrypt(value, config.security.fieldEncryptionKey).toString();
+    return secureEncrypt(value);
 }
 
 function decryptField(encrypted: string): string {
-    const bytes = CryptoJS.AES.decrypt(encrypted, config.security.fieldEncryptionKey);
-    return bytes.toString(CryptoJS.enc.Utf8);
+    // New format (AES-256-GCM) uses colons
+    if (encrypted.includes(':')) {
+        return secureDecrypt(encrypted);
+    }
+
+    // Legacy format (CryptoJS AES-CBC)
+    try {
+        const bytes = CryptoJS.AES.decrypt(encrypted, config.security.fieldEncryptionKey);
+        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+        return decrypted || encrypted;
+    } catch {
+        return encrypted;
+    }
 }
 
 // User status enum
