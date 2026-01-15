@@ -1,6 +1,6 @@
 import geoip from 'geoip-lite';
 import { LoginHistory, LoginResult } from '../models/LoginHistory';
-import { logger, securityLogger } from '../middleware/requestLogger';
+import { logger as _logger, securityLogger } from '../middleware/requestLogger';
 import { Op } from 'sequelize';
 
 /**
@@ -262,7 +262,7 @@ export class AnomalyDetector {
      * Check if login is at an unusual hour for this user
      */
     private checkUnusualHour(
-        userId: string,
+        _userId: string,
         recentLogins: LoginHistory[]
     ): boolean {
         if (recentLogins.length < 10) return false; // Not enough data
@@ -376,10 +376,10 @@ export class AnomalyDetector {
 
         // For now, just check for known TOR exit patterns
         // This is NOT comprehensive - use a real service in production
-        const geo = geoip.lookup(ip);
+        const _geo = geoip.lookup(ip);
 
         // Some VPN/hosting providers (simplified check)
-        const suspiciousASNs = ['AS9009', 'AS16276', 'AS24940', 'AS208622'];
+        const _suspiciousASNs = ['AS9009', 'AS16276', 'AS24940', 'AS208622'];
 
         return false; // Placeholder - implement with real service
     }

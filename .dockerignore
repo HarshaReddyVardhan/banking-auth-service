@@ -3,8 +3,8 @@ node_modules
 npm-debug.log
 
 # Source files (not needed in production)
-src
-tsconfig.json
+!src
+!tsconfig.json
 
 # Tests
 tests

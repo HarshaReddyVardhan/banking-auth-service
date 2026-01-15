@@ -30,7 +30,7 @@ function getUserAgent(req: Request): string {
 /**
  * Middleware to verify access token
  */
-async function authMiddleware(req: Request, res: Response, next: Function): Promise<void> {
+async function authMiddleware(req: Request, _res: Response, next: Function): Promise<void> {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -133,7 +133,7 @@ router.post(
     '/resend-verification',
     validate('resendVerification'),
     asyncHandler(async (req: Request, res: Response) => {
-        const result = await authService.resendVerificationEmail(
+        const _result = await authService.resendVerificationEmail(
             req.body.email,
             getClientIp(req)
         );

@@ -11,7 +11,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install all dependencies (including dev for build)
-RUN npm ci --only=production=false
+RUN npm ci 
 
 # Copy source code
 COPY tsconfig.json ./
@@ -35,6 +35,10 @@ RUN apk --no-cache add dumb-init && \
     rm -rf /var/cache/apk/*
 
 WORKDIR /app
+
+WORKDIR /app
+RUN ls -R  # This will list all files available to Docker during the build
+
 
 # Copy built artifacts and production dependencies
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist

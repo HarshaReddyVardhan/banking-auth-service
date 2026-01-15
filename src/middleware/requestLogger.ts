@@ -12,7 +12,7 @@ const logFormat = winston.format.combine(
             const meta = Object.keys(metadata as object).length
                 ? ` ${JSON.stringify(metadata)}`
                 : '';
-            return `${timestamp} [${level.toUpperCase()}]: ${message}${meta}`;
+            return `${timestamp} [${level.toUpperCase()}]: ${message}${meta as any}`;
         })
 );
 
@@ -125,7 +125,7 @@ export const securityLogger = {
             userId,
             ip,
             reason,
-            ...redactSensitiveData(details),
+            ...(redactSensitiveData(details) as any),
         });
     },
 
@@ -157,7 +157,7 @@ export const securityLogger = {
             event: 'audit',
             action,
             userId,
-            ...redactSensitiveData(details),
+            ...(redactSensitiveData(details) as any),
         });
     },
 };
